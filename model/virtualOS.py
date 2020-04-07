@@ -58,6 +58,9 @@ filecache = dict()
 MV = 1e20
 smallNumber = 1E-39
 
+# and set pi
+pi = math.pi
+
 # tuple of netcdf file suffixes (extensions) that can be used:
 netcdf_suffixes = ('.nc4','.nc')
 
@@ -1346,7 +1349,7 @@ def gdalwarpPCR(input,output,cloneOut,tmpDir,isLddMap=False,isNominalMap=False):
     stderr = None; del stderr
     n = gc.collect() ; del gc.garbage[:] ; n = None ; del n
 
-def getFullPath(inputPath,absolutePath,completeFileName = True):
+def getFullPath(inputPath, absolutePath, completeFileName = True):
     # 19 Mar 2013 created by Edwin H. Sutanudjaja
     # Function: to get the full absolute path of a folder or a file
           
@@ -2361,3 +2364,14 @@ def plot_variable(pcr_variable, filename = "test.map"):
     pcr.report(pcr_variable, filename)
     cmd = 'aguila '+str(filename)
     os.system(cmd)
+
+# conversions to and from radians
+def deg2rad(a):
+    
+    return a * pi / 180.0
+
+def rad2deg(a):
+    
+    return a * 180.0 / pi
+
+# julian day and relative julian day

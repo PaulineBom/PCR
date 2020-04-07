@@ -111,6 +111,8 @@ class Groundwater(object):
             groundwaterPropertiesNC = vos.getFullPath(\
                                       iniItems.groundwaterOptions[\
                                       'groundwaterPropertiesNC'],self.inputDir)
+        else:
+            groundwaterPropertiesNC = iniItems.groundwaterOptions['groundwaterPropertiesNC']
         ######################################################################################
 
 
@@ -339,6 +341,7 @@ class Groundwater(object):
 
             extrapolate = True
             if "noParameterExtrapolation" in iniItems.groundwaterOptions.keys() and iniItems.groundwaterOptions["noParameterExtrapolation"] == "True": extrapolate = False
+
             if extrapolate:
                 # extrapolate it 
                 self.allocSegments = pcr.cover(self.allocSegments, \

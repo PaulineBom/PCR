@@ -646,6 +646,7 @@ class LandSurface(object):
 
         extrapolate = True
         if "noParameterExtrapolation" in iniItems.landSurfaceOptions.keys() and iniItems.landSurfaceOptions["noParameterExtrapolation"] == "True": extrapolate = False
+
         if extrapolate:
 
              # extrapolate efficiency map:   # TODO: Make a better extrapolation algorithm (considering cell size, etc.). 
@@ -692,6 +693,7 @@ class LandSurface(object):
             
             extrapolate = True
             if "noParameterExtrapolation" in iniItems.landSurfaceOptions.keys() and iniItems.landSurfaceOptions["noParameterExtrapolation"] == "True": extrapolate = False
+
             if extrapolate:
                 # extrapolate it 
                 self.allocSegments = pcr.cover(self.allocSegments, \
@@ -739,6 +741,7 @@ class LandSurface(object):
 
                 extrapolate = True
                 if "noParameterExtrapolation" in self.iniItems.landSurfaceOptions.keys() and self.iniItems.landSurfaceOptions["noParameterExtrapolation"] == "True": extrapolate = False
+
                 if extrapolate:
                     filled_fractions = pcr.windowaverage(self.landCoverObj[coverType].fracVegCover,0.5)
                     filled_fractions = pcr.cover(filled_fractions,\
@@ -1021,9 +1024,27 @@ class LandSurface(object):
                                 currTimeStep.fulldate, useDoy = 'yearly',\
                                 cloneMapFileName = self.cloneMap)
                 else:
-                    routing.WaterBodies.fracWat = vos.readPCRmapClone(\
-                                routing.WaterBodies.fracWaterInp+str(currTimeStep.year)+".map",
-                                self.cloneMap,self.tmpDir,self.inputDir)
+                    if routing.WaterBodies.fracWaterInp != "None":
+                        routing.WaterBodies.fracWat = vos.readPCRmapClone(\
+                                    routing.WaterBodies.fracWaterInp+str(currTimeStep.year)+".map",
+                                    self.cloneMap,self.tmpDir,self.inputDir)
+                    else:
+                        routing.WaterBodies.fracWat = pcr.spatial(pcr.scalar(0.0))
+            else:
+                if routing.WaterBodies.useNetCDF:
+                    routing.WaterBodies.fracWat = vos.netcdf2PCRobjClone(\
+                                routing.WaterBodies.ncFileInp,'fracWaterInp', \
+                                currTimeStep.fulldate, useDoy = 'yearly',\
+                                cloneMapFileName = self.cloneMap)
+                else:
+                    if routing.WaterBodies.fracWaterInp != "None":
+                        routing.WaterBodies.fracWat = vos.readPCRmapClone(\
+                                    routing.WaterBodies.fracWaterInp,
+                                    self.cloneMap,self.tmpDir,self.inputDir)
+                    else:
+                        routing.WaterBodies.fracWat = pcr.spatial(pcr.scalar(0.0))
+            # Note that the variable used in the following line is FRACWAT (this may be a 'small' bug fixing to the GMD paper version)
+            FRACWAT = pcr.cover(routing.WaterBodies.fracWat, 0.0); 
         FRACWAT = pcr.cover(FRACWAT, 0.0)
         
         # zero fracwat assumption used for debugging against version 1.0
