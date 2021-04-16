@@ -280,7 +280,7 @@ class WaterBodies(object):
                     self.resMaxCapInp+str(year_used)+".map", \
                     self.cloneMap,self.tmpDir,self.inputDir)
 
-        self.resMaxCap = pcr.ifthen(self.resMaxCap > 0,\
+        self.resMaxCap = pcr.ifthen(self.resMaxCap > 0.,\
                                     self.resMaxCap)
         self.resMaxCap = pcr.areaaverage(self.resMaxCap,\
                                          self.waterBodyIds)

@@ -48,6 +48,8 @@ class Groundwater(object):
         result['avgNonFossilGroundwaterAllocationLong']  = self.avgNonFossilAllocation         # unit: m/day
         result['avgNonFossilGroundwaterAllocationShort'] = self.avgNonFossilAllocationShort    # unit: m/day
 
+        result['avgStorGroundwater']                     = self.avgStorGroundwater             # unit: m
+        
         # states that needed for the coupling between PCR-GLOBWB and MODFLOW:
         result['relativeGroundwaterHead'] = self.relativeGroundwaterHead                       # unit: m
         result['baseflow']                = self.baseflow                                      # unit: m/day
@@ -76,6 +78,19 @@ class Groundwater(object):
 
         self.useMODFLOW = False
         if iniItems.groundwaterOptions['useMODFLOW'] == "True": self.useMODFLOW = True
+
+        
+        # exponent in baseflow reservoir formula (default is one)
+        if "baseflow_exponent" in list(iniItems.groundwaterOptions.keys()):
+            msg = "The exponent for the groundwater reservoir formula is set according to the baseflow_exponent values in the groundwaterOptions of the configuration file."
+            logger.info(msg)
+            self.baseflow_exponent = vos.readPCRmapClone(iniItems.groundwaterOptions['baseflow_exponent'],\
+                                                         self.cloneMap,\
+                                                         self.tmpDir,\
+                                                         self.inputDir)
+        else:                                               
+            self.baseflow_exponent = pcr.spatial(pcr.scalar(1.0))
+        self.baseflow_exponent = pcr.ifthen(self.landmask, self.baseflow_exponent)    
 
 
         #####################################################################################################################################################
@@ -478,10 +493,18 @@ class Groundwater(object):
         # initial conditions (unit: m)
         if iniConditions == None: # when the model just start (reading the initial conditions from file)
 
-
-            self.storGroundwater         = vos.readPCRmapClone(\
+            if iniItems.groundwaterOptions['storGroundwaterIni'] != "ESTIMATE_FROM_GROUNDWATER_RECHARGE_RATE":
+                self.storGroundwater     = vos.readPCRmapClone(\
                                            iniItems.groundwaterOptions['storGroundwaterIni'],
                                            self.cloneMap,self.tmpDir,self.inputDir)
+            else:
+                msg = "Estimating initial conditions of storGroundwater based on the daily groundwater recharge rate given in the configuration file."
+                logger.info(msg)
+                daily_gw_recharge        = vos.readPCRmapClone(\
+                                           iniItems.groundwaterOptions['storGroundwaterIni'],
+                                           self.cloneMap,self.tmpDir,self.inputDir)
+                self.storGroundwater     = daily_gw_recharge / self.recessionCoeff
+            
             self.avgAbstraction          = vos.readPCRmapClone(\
                                            iniItems.groundwaterOptions['avgTotalGroundwaterAbstractionIni'],
                                            self.cloneMap,self.tmpDir,self.inputDir)
@@ -509,6 +532,20 @@ class Groundwater(object):
                             iniItems.groundwaterOptions['baseflowIni'],
                             self.cloneMap,self.tmpDir,self.inputDir)
 
+            # initial condition for avgStorGroundwater (unit: m)
+            # - only relevant if non-linear groundwater reservoir is used
+            if 'avgStorGroundwaterIni' in list(iniItems.groundwaterOptions.keys()):
+                self.avgStorGroundwater      = vos.readPCRmapClone(\
+                                               iniItems.groundwaterOptions['avgStorGroundwaterIni'],
+                                               self.cloneMap, self.tmpDir, self.inputDir)
+            else:                                   
+                msg = "The initial state of avgStorGroundwaterIni is not defined in the configuration file. Yet, this is only relevant if non linear grdundwater reservoir is used."
+                logger.warning(msg)
+                msg = "This run uses storGroundwaterIni = avgStorGroundwaterIni."
+                logger.warning(msg)
+                self.avgStorGroundwater = self.storGroundwater
+
+
         else:                     # during/after spinUp
             self.storGroundwater             = iniConditions['groundwater']['storGroundwater']
             self.avgAbstraction              = iniConditions['groundwater']['avgTotalGroundwaterAbstraction']
@@ -519,6 +556,8 @@ class Groundwater(object):
 
             self.relativeGroundwaterHead     = iniConditions['groundwater']['relativeGroundwaterHead']
             self.baseflow                    = iniConditions['groundwater']['baseflow']
+            
+            self.avgStorGroundwater          = iniConditions['groundwater']['avgStorGroundwater']
 
         # initial condition for storGroundwaterFossil (unit: m)
         #
@@ -541,12 +580,18 @@ class Groundwater(object):
             self.storGroundwaterFossil = pcr.min(self.storGroundwaterFossil, self.fossilWaterCap)
             self.storGroundwaterFossil = pcr.max(0.0, self.storGroundwaterFossil)
 
+
         # make sure that active storGroundwater, avgAbstraction and avgNonFossilAllocation cannot be negative
         #
         self.storGroundwater = pcr.cover( self.storGroundwater,0.0)
         self.storGroundwater = pcr.max(0.,self.storGroundwater)
         self.storGroundwater = pcr.ifthen(self.landmask,\
                                           self.storGroundwater)
+        #
+        self.avgStorGroundwater = pcr.cover( self.avgStorGroundwater, 0.0)
+        self.avgStorGroundwater = pcr.max(0.,self.avgStorGroundwater)
+        self.avgStorGroundwater = pcr.ifthen(self.landmask,\
+                                             self.avgStorGroundwater)
         #
         self.avgAbstraction  = pcr.cover( self.avgAbstraction,0.0)
         self.avgAbstraction  = pcr.max(0.,self.avgAbstraction)
@@ -680,15 +725,27 @@ class Groundwater(object):
         self.storGroundwater         = pcr.max(0.,\
                                        self.storGroundwater - self.nonFossilGroundwaterAbs)
 
-        # baseflow
-        self.baseflow         = pcr.max(0.,\
-                                pcr.min(self.storGroundwater,\
-                                        self.recessionCoeff* \
-                                        self.storGroundwater))
+        
+        # groundwater discharge (baseflow) - unit: m.day
+        # - baseflow = (1/J)*<S3>*(S3/<S3>)^gamma
+        baseflow = self.recessionCoeff * self.avgStorGroundwater * ((vos.getValDivZero(self.storGroundwater, self.avgStorGroundwater))**self.baseflow_exponent)
+        # - use linear reservoir if avgStorGroundwater < 5 mm
+        baseflow = pcr.ifthenelse(self.avgStorGroundwater < 0.005, self.recessionCoeff * self.storGroundwater, baseflow)
+        #
+        # set the minimum value is from the linear reservoir
+        min_baseflow  = self.recessionCoeff * self.storGroundwater
+        baseflow = pcr.max(min_baseflow, baseflow)
+        #
+        # make sure that baseflow is always positive 
+        self.baseflow          = pcr.max(0.,\
+                                 pcr.min(self.storGroundwater, baseflow))
+        
+        # update storGroundwater after baseflow
         self.storGroundwater  = pcr.max(0.,\
                                 self.storGroundwater - self.baseflow)
         # PS: baseflow must be calculated at the end (to ensure the availability of storGroundwater to support nonFossilGroundwaterAbs)
 
+        
         # fossil groundwater abstraction:
         self.fossilGroundwaterAbstr = landSurface.fossilGroundwaterAbstr
         self.storGroundwaterFossil -= self.fossilGroundwaterAbstr
@@ -779,6 +836,15 @@ class Groundwater(object):
                                         deltaAllocationShort/\
                                         pcr.min(7., pcr.max(1.0, routing.timestepsToAvgDischarge))
         self.avgAllocationShort    = pcr.max(0.0, self.avgAllocationShort)
+
+        
+        # calculate the average storGroundwater (S3, unit: m) from the last 5 x 365 days:
+        deltaStorGroundwater    = self.storGroundwater - self.avgStorGroundwater
+        self.avgStorGroundwater = self.avgStorGroundwater +\
+                                  deltaStorGroundwater/\
+                                  pcr.min(5. * 365., pcr.max(1.0, routing.timestepsToAvgDischarge))
+        self.avgStorGroundwater = pcr.max(0.0, self.avgStorGroundwater)
+
 
     def old_style_groundwater_reporting(self,currTimeStep):
 

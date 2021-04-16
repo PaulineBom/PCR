@@ -63,7 +63,8 @@ from copy import deepcopy
 
 # set the global option to radians
 pcr.setglobaloption('radians')
-# TODO: Check whether this setglobaloption affects other parts of PCR-GLOBWB
+# FIXME: This setglobaloption affects other parts of PCR-GLOBWB, e.g. the Hamon method.
+
 
 # type set to identify None (compatible with pytyon 2.x)
 NoneType = type(None)
@@ -712,10 +713,10 @@ All variables are also set internally
         self.patm_cor = patm_cor
         self.beta = beta
 
-        # return the values
-        return tau_o, tau_a, tau_v, patm_cor, beta
+        # ~ # return the values
+        # ~ return tau_o, tau_a, tau_v, patm_cor, beta
 
-    def update(self, date, prec_daily, temp_min_daily, temp_max_daily, temp_avg_daily = None, dew_temperature = None, extraterrestrial_rad = None):
+    def update(self, date, prec_daily, temp_min_daily, temp_max_daily, temp_avg_daily = None, dew_temperature = None, extraterrestrial_rad = None, relative_humidity = None):
 
         '''
 
@@ -742,6 +743,8 @@ precipitation, minimum and maximum daily temperature.
                           solar constant specified, e.g default value of solar constant 
                           is 118.1 MJ/m2/day, equivalent to 341 W/m2;
                           
+    relative_humidity     [1]
+    
                           all precipitation, temperature and radiation fields supposed 
                           to be spatial scalar PCRaster fields or compatible with this.
                           
@@ -766,7 +769,7 @@ precipitation, minimum and maximum daily temperature.
 
         # extraterrestrial radiation
         self.radsw_ext = extraterrestrial_rad
-        if self.radsw_ext == None:\
+        if self.radsw_ext is None:\
            self.radsw_ext = compute_radsw_ext(self.latitude, solar_declination, \
                                               eccentricity, day_length, \
                                               self.solar_constant)
@@ -775,13 +778,16 @@ precipitation, minimum and maximum daily temperature.
         # daily precipitation amount
         wet_day = prec_daily > self.prec_limit 
 
-        # estimate the relative humidity 
-        # - if not defined, using the minimum daily temperature as the dewpoint temperature
-        if dew_temperature == None: dew_temperature = temp_min_daily
-        # - if not defined, using the maximum daily temperature as the average temperature
-        if  temp_avg_daily == None: temp_avg_daily  = temp_max_daily
-        rel_hum = estimate_relative_humidity(t = temp_avg_daily , \
-                                             tdew = dew_temperature)
+        # relative humidity [1]
+        rel_hum = relative_humidity
+        if rel_hum is None:
+            # estimate the relative humidity from dewpoint temperature 
+            # - if not defined, using the minimum daily temperature as the dewpoint temperature
+            if dew_temperature is None: dew_temperature = temp_min_daily
+            # - if not defined, using the maximum daily temperature as the average temperature
+            if  temp_avg_daily is None: temp_avg_daily  = temp_max_daily
+            rel_hum = estimate_relative_humidity(t = temp_avg_daily , \
+                                                 tdew = dew_temperature)
 
         # get the transmittance
         # tau_cf:             transmittance [-] for a cloud-free atmospheric column,

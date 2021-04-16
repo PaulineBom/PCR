@@ -39,6 +39,7 @@ def getSaturatedVapourPressure(temperature):
 	'''returns the saturated vapour pressure [Pa] as \
 as a function of temperature [degC]'''
 	return 611.0*pcr.exp(17.27*temperature/(temperature+237.3))
+	# see also https://www.weather.gov/media/epz/wxcalc/vaporPressure.pdf
 
 def getSlopeVapourPressureCurve(temperature,satVapPres):
 	'''returns the slope of the saturated vapour pressure curve [Pa.degC**-1]'''
@@ -49,7 +50,7 @@ def getPsychrometricConstant(atmosphericPressure,\
 	'''returns the psychrometric constant [Pa.degC**-1]'''
 	return (cpAir*atmosphericPressure)/(epsilon*latentHeatVaporization)
 
-def getLongWaveRadiation(temperature,eAct,radFrac= 1.00):
+def getLongWaveRadiation(temperature, eAct, radFrac= 1.00, relativeHumidity = None):
 	'''getLongWaveRadiation: returns the longwave radiation [W.m**-2] \
 according to FAO guidelines.
 
@@ -72,6 +73,12 @@ according to FAO guidelines.
 	radSlope= 0.50
 	radDif= 0.35
 	radCor= (1+radDif)/(radCon+radSlope)
+	
+	# estimate actual vapor pressure based on relativeHumidity
+	if eAct is None:
+		satVapPressure = getSaturatedVapourPressure(temperature)
+		eAct = relativeHumidity * satVapPressure
+
 	#-longwave radiation
 	return sigma*(temperature+273.15)**4*pcr.max(0,ea0-eaFactor*eAct**0.5)*\
 		pcr.max(0,(pcr.min(1+radDif,radCor*radFrac)-radDif))

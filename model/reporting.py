@@ -60,6 +60,16 @@ class Reporting(object):
         # initiate reporting tool/object and its configuration
         self.initiate_reporting()
 
+        # landmask for reporting
+        self.landmask_for_reporting = None
+        if "landmask_for_reporting" in list(configuration.reportingOptions.keys()) and\
+            self.configuration.reportingOptions["landmask_for_reporting"] != "None": 
+            self.landmask_for_reporting = vos.readPCRmapClone(\
+                                                              configuration.reportingOptions['landmask_for_reporting'], \
+                                                              configuration.cloneMap, \
+                                                              configuration.tmpDir, \
+                                                              configuration.globalOptions["inputDir"])
+            
         # option for debugging to PCR-GLOBWB version 1.0
         self.debug_to_version_one = False
         if self.configuration.debug_to_version_one: self.debug_to_version_one = True
@@ -354,6 +364,9 @@ class Reporting(object):
         self.additional_post_processing()
         #-RvB 23/02/2017: post-processing for the eartH2Observe project
         self.e2o_post_processing()
+        
+        # reporting, post-processing for the Ulysses project
+        self.ulysses_post_processing()
                 
         if self.debug_to_version_one:
             if self._modelTime.timeStepPCR == 1: self.report_static_maps_for_debugging()
@@ -627,6 +640,8 @@ class Reporting(object):
         
         self.satDegUpp            = self._model.landSurface.satDegUppTotal
         self.satDegLow            = self._model.landSurface.satDegLowTotal
+
+        self.satDegTotal          = self._model.landSurface.satDegTotal
         
         self.storGroundwater      = self._model.groundwater.storGroundwater
         
@@ -999,7 +1014,13 @@ class Reporting(object):
         if self.outDailyTotNC[0] != "None":
             for var in self.outDailyTotNC:
                 
+                # masking out for reporting
+                if self.landmask_for_reporting is not None:
+                    vars(self)[var] = pcr.ifthen(self.landmask_for_reporting, \
+                                                 vars(self)[var])
+
                 short_name = varDicts.netcdf_short_name[var]
+                
                 self.netcdfObj.data2NetCDF(self.outNCDir+"/"+ \
                                             str(var)+\
                                             "_dailyTot_output.nc",\
@@ -1018,6 +1039,11 @@ class Reporting(object):
                    self._modelTime.day == 1:\
                    vars(self)[var+'MonthTot'] = pcr.scalar(0.0)
 
+                # masking out for reporting
+                if self.landmask_for_reporting is not None:
+                    vars(self)[var] = pcr.ifthen(self.landmask_for_reporting, \
+                                                 vars(self)[var])
+
                 # accumulating
                 vars(self)[var+'MonthTot'] += vars(self)[var]
 
@@ -1025,6 +1051,7 @@ class Reporting(object):
                 if self._modelTime.endMonth == True: 
 
                     short_name = varDicts.netcdf_short_name[var]
+
                     self.netcdfObj.data2NetCDF(self.outNCDir+"/"+ \
                                             str(var)+\
                                                "_monthTot_output.nc",\
@@ -1044,6 +1071,11 @@ class Reporting(object):
                     if self._modelTime.timeStepPCR == 1 or \
                        self._modelTime.day == 1:\
                        vars(self)[var+'MonthTot'] = pcr.scalar(0.0)
+
+                    # masking out for reporting
+                    if self.landmask_for_reporting is not None:
+                        vars(self)[var] = pcr.ifthen(self.landmask_for_reporting, \
+                                                     vars(self)[var])
 
                     # accumulating
                     vars(self)[var+'MonthTot'] += vars(self)[var]
@@ -1084,8 +1116,14 @@ class Reporting(object):
                 # introduce variables at the beginning of simulation or
                 #     reset variables at the beginning of the month
                 if self._modelTime.timeStepPCR == 1 or \
-                   self._modelTime.day == 1:\
-                   vars(self)[var+'MonthMax'] = pcr.scalar(0.0)
+                   self._modelTime.day == 1:
+                    vars(self)[var+'MonthMax'] = pcr.scalar(0.0)
+                    vars(self)[var+'MonthMax'] = vars(self)[var]
+
+                # masking out for reporting
+                if self.landmask_for_reporting is not None:
+                    vars(self)[var] = pcr.ifthen(self.landmask_for_reporting, \
+                                                 vars(self)[var])
 
                 # find the maximum
                 vars(self)[var+'MonthMax'] = pcr.max(vars(self)[var], vars(self)[var+'MonthMax'])
@@ -1111,6 +1149,11 @@ class Reporting(object):
                 if self._modelTime.timeStepPCR == 1 or \
                    self._modelTime.doy == 1:\
                    vars(self)[var+'AnnuaTot'] = pcr.scalar(0.0)
+
+                # masking out for reporting
+                if self.landmask_for_reporting is not None:
+                    vars(self)[var] = pcr.ifthen(self.landmask_for_reporting, \
+                                                 vars(self)[var])
 
                 # accumulating
                 vars(self)[var+'AnnuaTot'] += vars(self)[var]
@@ -1138,6 +1181,11 @@ class Reporting(object):
                     if self._modelTime.timeStepPCR == 1 or \
                        self._modelTime.doy == 1:\
                        vars(self)[var+'AnnuaTot'] = pcr.scalar(0.0)
+
+                    # masking out for reporting
+                    if self.landmask_for_reporting is not None:
+                        vars(self)[var] = pcr.ifthen(self.landmask_for_reporting, \
+                                                     vars(self)[var])
 
                     # accumulating
                     vars(self)[var+'AnnuaTot'] += vars(self)[var]
@@ -1178,8 +1226,14 @@ class Reporting(object):
                 # introduce variables at the beginning of simulation or
                 #     reset variables at the beginning of the year
                 if self._modelTime.timeStepPCR == 1 or \
-                   self._modelTime.doy == 1:\
-                   vars(self)[var+'AnnuaMax'] = pcr.scalar(0.0)
+                   self._modelTime.doy == 1:
+                    vars(self)[var+'AnnuaMax'] = pcr.scalar(0.0)
+                    vars(self)[var+'AnnuaMax'] = vars(self)[var]
+
+                # masking out for reporting
+                if self.landmask_for_reporting is not None:
+                    vars(self)[var] = pcr.ifthen(self.landmask_for_reporting, \
+                                                 vars(self)[var])
 
                 # find the maximum
                 vars(self)[var+'AnnuaMax'] = pcr.max(vars(self)[var], vars(self)[var+'AnnuaMax'])
@@ -1229,3 +1283,56 @@ class Reporting(object):
                             self._model.landSurface.storLowTotal ) * 1000 # report in kg m-2 (water in RootLayerThick)
         self.TotMoist   =   self.RootMoist # equals RootMoist...
         self.GroundMoist    = self._model.groundwater.storGroundwater * 1000  # self._model.groundwater. # report in kg m-2
+
+    def ulysses_post_processing(self):
+
+        # PGB is assumed to write at least ET, SWE, Qsm, SM, Qr
+        
+        # surface temperature
+        self.ulyssesTsurf = None
+        
+        # total precipitation (kg m-2 s-1)
+        self.ulyssesP     = self._model.meteo.precipitation / 86.4 
+        
+        # total evaporation and transpiration (kg m-2 s-1)
+        # - land only
+        self.ulyssesET       = - (self._model.landSurface.actualET   ) / 86.4
+        # - including water bodies
+        self.ulyssesETall    = - (self._model.landSurface.actualET + 
+                              self._model.routing.waterBodyEvaporation) / 86.4
+        
+        # potential evaporation
+        # - reference potential evaporation
+        self.ulyssessRefPET     = - (self.referencePotET) / 86.4
+        # - with crop coefficient, but land only, excluding water
+        self.ulyssessCropPET    = - (self._model.landSurface.totalPotET) / 86.4
+        # - with crop coefficient, land and water
+        self.ulyssessCropPETall = - (self._model.landSurface.totalPotET + self._model.routing.waterBodyPotEvap) / 86.4
+
+        
+        # SWE (kg m-2")
+        # - including free water stored above the snow cover
+        self.ulyssesSWE      =   (self._model.landSurface.snowCoverSWE + self._model.landSurface.snowFreeWater)* 1000.
+        # - excluding free water stored above the snow cover
+        self.ulyssesSWE_excluding_free_water = (self._model.landSurface.snowCoverSWE) * 1000.
+        
+        # Qsm = snowmelt (kg m-2 s-1)
+        self.ulyssesQsm      =    self._model.landSurface.snowMelt / 86.4
+        
+        # SM: total volumetric of soil moisture (%) - THIS IS WRONG # TODO: FIX THIS
+        self.ulyssesSM       =    self._model.landSurface.satDegTotal
+        self.ulyssesSMUpp    = self._model.landSurface.satDegUppTotal
+        self.ulyssesSMLow    = self._model.landSurface.satDegLowTotal
+
+        # Qr: total runoff (report in kg m-2 s-1)
+        # - land only, not including local changes in water body
+        self.ulyssesQrRunoff = - self._model.routing.runoff / 86.4 
+        
+        # gridder river discharge
+        self.ulyssesDischarge  = self.discharge
+
+        # TWS (kg m-2)
+        self.ulyssesTWS = self.totalWaterStorageThickness * 1000. 
+
+        # extra variable for ILAMB evaluation
+        self.ulyssesSnowFraction = pcr.ifthenelse(self.ulyssesSWE > 0.0, pcr.scalar(1.0), pcr.scalar(0.0))
